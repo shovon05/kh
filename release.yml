@@ -1,0 +1,40 @@
+name: Build & Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build release binary
+        run: swift build -c release
+
+      - name: Package binary
+        run: |
+          cp .build/release/cmk cmk
+          tar -czf cmk-macos.tar.gz cmk
+          shasum -a 256 cmk-macos.tar.gz > cmk-macos.tar.gz.sha256
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            cmk-macos.tar.gz
+            cmk-macos.tar.gz.sha256
+          body: |
+            ## 🧹 CleanMyKeyboard ${{ github.ref_name }}
+
+            ### Install
+            ```bash
+            curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/main/scripts/install.sh | bash
+            ```
+
+            ### Manual download
+            Download `cmk-macos.tar.gz`, extract, and move `cmk` to `/usr/local/bin/`.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
