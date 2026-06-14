@@ -32,7 +32,7 @@ curl -fsSL https://raw.githubusercontent.com/shovon05/cmk/main/scripts/install.s
 ### Manual build from source
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/cmk.git
+git clone https://github.com/shovon05/cmk.git
 cd cmk
 swift build -c release
 sudo cp .build/release/cmk /usr/local/bin/cmk
