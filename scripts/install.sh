@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # CleanMyKeyboard — installer
-# Usage: curl -fsSL https://raw.githubusercontent.com/YOUR_USERNAME/cmk/main/scripts/install.sh | bash
+# Usage: curl -fsSL https://raw.githubusercontent.com/shovon05/cmk/main/scripts/install.sh | bash
 
 set -e
 
-REPO="YOUR_USERNAME/cmk"   # ← replace with your GitHub username/repo
+REPO="shovon05/cmk"   # ← replace with your GitHub username/repo
 BINARY_NAME="cmk"
 INSTALL_DIR="/usr/local/bin"
 
