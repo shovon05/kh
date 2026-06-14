@@ -26,7 +26,7 @@
 ### One-liner (recommended)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/YOUR_USERNAME/cmk/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/shovon05/cmk/main/scripts/install.sh | bash
 ```
 
 ### Manual build from source
