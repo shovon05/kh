@@ -2,14 +2,14 @@
 import PackageDescription
 
 let package = Package(
-    name: "cmk",
+    name: "kh",
     platforms: [
         .macOS(.v12)
     ],
     targets: [
         .executableTarget(
-            name: "cmk",
-            path: "Sources/cmk",
+            name: "kh",
+            path: "Sources/kh",
             linkerSettings: [
                 .linkedFramework("AppKit"),
                 .linkedFramework("CoreGraphics"),
