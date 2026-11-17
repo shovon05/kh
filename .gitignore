@@ -4,3 +4,4 @@
 *.d
 Package.resolved
 .swiftpm/
+skills/

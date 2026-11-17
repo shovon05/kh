@@ -11,14 +11,15 @@
 
 ## ✨ Features
 
-- **10-second countdown** before hibernation — giving you time to cancel
+- **Customizable countdown** — 10s default (`--seconds <n>`), or instant hibernation (`--now`)
 - **Full keyboard hibernation** — every key is blocked, including Space, modifiers, and function keys
-- **No key leaks through** — the event tap sits at the head of the macOS input chain
-- **Soft system sounds** play on hibernate and wake
+- **No key leaks through** — event tap sits at `.headInsertEventTap` with automatic timeout recovery
+- **Soft system audio feedback** — plays pleasant chime on hibernate and wake (or `--silent`)
 - **Native macOS notifications** — "Keyboard hibernating" / "Keyboard awake"
-- **Simple wake chord**: hold `Ctrl + Option + Cmd` simultaneously
-- **Clean terminal UI** with live progress bar
-- Zero dependencies — pure Swift + macOS frameworks
+- **Simple, secure wake chord**: hold `Ctrl + Option + Cmd` simultaneously
+- **Clean terminal UI** with live progress bar and guaranteed cursor restoration
+- **Zero dependencies** — pure Swift + macOS native frameworks
+- **Zero-footprint uninstaller** — leaves no lingering files, caches, or background daemons
 
 ---
 
@@ -49,18 +50,31 @@ sudo cp .build/release/kh /usr/local/bin/kh
 ## 🚀 Usage
 
 ```bash
+# Standard 10-second countdown
 kh
+
+# Custom countdown duration (e.g. 5 seconds)
+kh --seconds 5
+
+# Hibernate immediately without countdown
+kh --now
+
+# Run silently without sound effects or notifications
+kh --silent
+
+# Show help & all options
+kh --help
 ```
 
-That's it. Here's what happens:
+### What happens when you run `kh`:
 
-1. `kh` launches and shows a **10-second countdown**
-2. Press `Ctrl+C` anytime during countdown to cancel
-3. After countdown: keyboard **fully hibernates** ❄️
-4. A soft sound plays + macOS notification fires
-5. Wipe your keyboard to your heart's content 🧹
-6. Hold **`Ctrl + Option + Cmd`** simultaneously to wake
-7. Another soft sound + notification: keyboard is back ✅
+1. `kh` launches and displays a countdown with a live progress bar.
+2. Press `Ctrl+C` anytime during the countdown to safely cancel.
+3. Once the countdown ends, the keyboard **fully hibernates** ❄️.
+4. A soft sound plays and a macOS notification fires.
+5. Wipe and clean your keyboard freely 🧹.
+6. Hold **`Ctrl + Option + Cmd`** simultaneously to wake.
+7. Another soft sound plays, the awake screen shows, and your keyboard is instantly active ✅.
 
 ---
 
@@ -68,12 +82,12 @@ That's it. Here's what happens:
 
 `kh` uses macOS's **Accessibility API** to intercept keyboard events system-wide. On first run:
 
-1. macOS will show a permission dialog
-2. Go to **System Settings → Privacy & Security → Accessibility**
-3. Enable your Terminal app (Terminal.app, iTerm2, Warp, etc.)
-4. Run `kh` again
+1. macOS will show a permission dialog.
+2. Go to **System Settings → Privacy & Security → Accessibility**.
+3. Enable your Terminal app (Terminal, iTerm2, Warp, Ghostty, Alacritty, etc.).
+4. Run `kh` again.
 
-This permission is required — without it, keyboard hibernation is not possible.
+> **Note:** macOS grants Accessibility to the terminal host running the binary. No special daemon or background helper is installed.
 
 ---
 
@@ -84,21 +98,31 @@ This permission is required — without it, keyboard hibernation is not possible
 | **Wake keyboard** | Hold `Ctrl` + `Option` + `Cmd` simultaneously |
 | **Cancel (before hibernate)** | `Ctrl + C` |
 
-> **Note:** Unlike the old Space-based combo, the wake chord uses **only modifier keys** held together. This means even Space is fully blocked during hibernation — no key of any kind can slip through.
+> **Note:** The wake chord uses **only modifier keys** held together. This ensures even Space is fully blocked during hibernation — no key of any kind can slip through while wiping keys.
 
 ---
 
-## 🗑️ Uninstall
+## 🗑️ Complete Uninstallation
+
+To completely uninstall `kh` with zero traces left behind:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/shovon05/kh/main/scripts/uninstall.sh | bash
 ```
 
-Or manually:
+Or from a local clone:
 
 ```bash
-sudo rm /usr/local/bin/kh
+bash scripts/uninstall.sh
 ```
+
+### What the uninstaller cleans:
+- All installed binaries across system directories (`/usr/local/bin/kh`, `/opt/homebrew/bin/kh`, `~/.local/bin/kh`, and legacy `cmk`)
+- Temporary build directories and installer remnants (`/tmp/kh*`)
+- Local build caches (`.build/`, `.swiftpm/`)
+- User application caches (if any)
+
+Zero background services, daemons, or configuration files remain.
 
 ---
 
@@ -108,10 +132,10 @@ sudo rm /usr/local/bin/kh
 kh/
 ├── Sources/
 │   └── kh/
-│       └── main.swift        # All app logic
+│       └── main.swift        # Complete app logic, CLI args, & event tap
 ├── scripts/
-│   ├── install.sh            # One-liner installer
-│   └── uninstall.sh          # Uninstaller
+│   ├── install.sh            # Universal installer (local & remote)
+│   └── uninstall.sh          # Zero-trace uninstaller
 ├── Package.swift             # Swift Package Manager manifest
 ├── LICENSE
 └── README.md
@@ -121,13 +145,11 @@ kh/
 
 ## 🤝 Contributing
 
-PRs welcome! Some ideas for contributions:
+PRs and suggestions welcome!
 
-- [ ] Brew formula (`brew install kh`)
-- [ ] Custom countdown duration (`kh --seconds 30`)
-- [ ] Custom wake combo support
-- [ ] Menu bar status icon while hibernating
-- [ ] Mouse disabling option
+- [ ] Homebrew formula (`brew install shovon05/tap/kh`)
+- [ ] Mouse / trackpad disabling option (`kh --lock-mouse`)
+- [ ] Menu bar status indicator while hibernating
 
 ---
 

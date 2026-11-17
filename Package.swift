@@ -9,12 +9,7 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "kh",
-            path: "Sources/kh",
-            linkerSettings: [
-                .linkedFramework("AppKit"),
-                .linkedFramework("CoreGraphics"),
-                .linkedFramework("Foundation")
-            ]
+            path: "Sources/kh"
         )
     ]
 )
