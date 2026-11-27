@@ -2,10 +2,12 @@ import Foundation
 import Darwin
 
 public final class AppRunner {
+    private let signalQueue = DispatchQueue(label: "com.shovon.kh.signals")
     private var signalSources: [DispatchSourceSignal] = []
     private var countdownTimer: DispatchSourceTimer?
     private var timeoutTimer: DispatchSourceTimer?
     private var hibernator: KeyboardHibernator?
+    private var totalTimeout: Int?
     private var remainingTimeout: Int?
     private var currentHoldProgress: Double = 0.0
     private var didFinish = false
@@ -13,7 +15,7 @@ public final class AppRunner {
     public init() {}
 
     public func run(arguments: [String] = Array(CommandLine.arguments.dropFirst())) -> Int32 {
-        let config: AppConfig
+        var config: AppConfig
         do {
             config = try CLIParser.parse(arguments)
         } catch {
@@ -34,6 +36,15 @@ public final class AppRunner {
             return 0
         }
 
+        switch config.command {
+        case .update(let checkOnly, let quiet, let force):
+            return runUpdateCommand(checkOnly: checkOnly, quiet: quiet, force: force, ui: ui)
+        case .autoUpdate(let action):
+            return runAutoUpdateCommand(action: action, ui: ui)
+        case .run:
+            break
+        }
+
         installCursorRestoreAtExit()
         installSignalSources(ui: ui)
 
@@ -45,6 +56,26 @@ public final class AppRunner {
 
         if AccessibilityHelper.isSecureEventInputEnabled() {
             ui.printWarning("Secure Keyboard Entry is active (e.g. Terminal menu or password field). macOS may block event interception until disabled.")
+        }
+
+        // Kick off throttled background auto-update check without delaying startup
+        Updater.triggerBackgroundAutoCheckIfDue()
+        let pendingUpdateNotice = Updater.consumeUpdateNotice()
+
+        // Interactive duration prompt when running `kh` with no explicit timing flags
+        if !config.hasExplicitTimingFlags && ui.isInteractiveInput {
+            let defaultMouseLock = config.lockMouseExplicitlySet ? config.lockMouse : true
+            guard let selection = ui.promptInteractiveSession(
+                defaultLockMouse: defaultMouseLock,
+                updateNotice: pendingUpdateNotice
+            ) else {
+                return 0
+            }
+            config.countdownSeconds = 0
+            config.timeoutSeconds = selection.timeoutSeconds
+            config.lockMouse = selection.lockMouse
+        } else if let notice = pendingUpdateNotice, ui.isTTY {
+            ui.printUpdateNotice(notice)
         }
 
         ui.hideCursor()
@@ -59,6 +90,89 @@ public final class AppRunner {
         return 0
     }
 
+    // MARK: - Update & Auto-Update Subcommands
+
+    private func runUpdateCommand(checkOnly: Bool, quiet: Bool, force: Bool, ui: TerminalUI) -> Int32 {
+        do {
+            if checkOnly {
+                let status = try Updater.checkForUpdate()
+                switch status {
+                case .upToDate(let version, _):
+                    if !quiet { ui.printSuccess("kh is already up to date (v\(version)).") }
+                case .updateAvailable(let currentVersion, _, let remote):
+                    if !quiet {
+                        let short = remote.shortSha ?? String(remote.sha.prefix(7))
+                        ui.printInfo("Update available: v\(currentVersion) → v\(remote.version) (\(short)). Run 'kh update' to install.")
+                    }
+                case .updated:
+                    break
+                }
+                return 0
+            }
+
+            if !quiet {
+                ui.printInfo("Checking GitHub Releases for updates...")
+            }
+
+            let status = try Updater.performUpdate(force: force, allowSudo: !quiet)
+            switch status {
+            case .upToDate(let version, _):
+                if !quiet { ui.printSuccess("kh is already up to date (v\(version)).") }
+            case .updated(let fromVersion, let toVersion, let sha):
+                if !quiet {
+                    let short = sha.map { " (\(String($0.prefix(7))))" } ?? ""
+                    ui.printSuccess("Updated kh: v\(fromVersion) → v\(toVersion)\(short)")
+                }
+            case .updateAvailable:
+                break
+            }
+            return 0
+        } catch {
+            if !quiet {
+                ui.printError("\(error)")
+            }
+            return 1
+        }
+    }
+
+    private func runAutoUpdateCommand(action: AutoUpdateAction, ui: TerminalUI) -> Int32 {
+        switch action {
+        case .enable:
+            do {
+                try Updater.enableAutoUpdateAgent()
+                ui.printSuccess("Background auto-updater enabled (runs at login & every 6h).")
+                ui.printInfo("LaunchAgent: \(Updater.launchAgentURL.path)")
+                return 0
+            } catch {
+                ui.printError("\(error)")
+                return 1
+            }
+
+        case .disable:
+            Updater.disableAutoUpdateAgent()
+            ui.printSuccess("Background auto-updater disabled and LaunchAgent removed.")
+            return 0
+
+        case .status:
+            let enabled = Updater.isAutoUpdateAgentEnabled()
+            let state = Updater.loadState()
+            let binPath = Updater.currentExecutablePath()
+            ui.printInfo("Binary:      \(binPath)")
+            ui.printInfo("Version:     v\(AppMeta.version)\(state.installedSha.map { " (\($0.prefix(7)))" } ?? "")")
+            ui.printInfo("LaunchAgent: \(enabled ? "Enabled (\(Updater.launchAgentURL.path))" : "Disabled")")
+            if let last = state.lastCheckedEpoch {
+                let date = Date(timeIntervalSince1970: last)
+                let formatted = DateFormatter.localizedString(from: date, dateStyle: .short, timeStyle: .short)
+                ui.printInfo("Last check:  \(formatted)")
+            } else {
+                ui.printInfo("Last check:  Never")
+            }
+            return 0
+        }
+    }
+
+    // MARK: - Signals & Cleanup
+
     private func installCursorRestoreAtExit() {
         atexit {
             let restore = "\u{001B}[?25h"
@@ -72,7 +186,7 @@ public final class AppRunner {
         let signals: [Int32] = [SIGINT, SIGTERM, SIGHUP]
         for sig in signals {
             signal(sig, SIG_IGN)
-            let source = DispatchSource.makeSignalSource(signal: sig, queue: .main)
+            let source = DispatchSource.makeSignalSource(signal: sig, queue: signalQueue)
             source.setEventHandler { [weak self] in
                 self?.handleTerminationSignal(ui: ui)
             }
@@ -91,18 +205,23 @@ public final class AppRunner {
         timeoutTimer = nil
 
         let wasHibernating = hibernator?.isHibernating ?? false
-        hibernator?.stopHibernating()
-        ui.showCursor()
-
         if wasHibernating {
-            ui.printAwake(reason: .interrupted)
+            DispatchQueue.main.async { [weak self] in
+                self?.hibernator?.stopHibernating()
+                ui.showCursor()
+                ui.printAwake(reason: .interrupted)
+                exit(0)
+            }
         } else {
-            let p = ui.palette
-            print("\n\n  \(p.yellow)✕ Cancelled — keyboard was not hibernated.\(p.reset)\n")
-            fflush(stdout)
+            let restore = "\u{001B}[?25h\n\n  \(ui.palette.yellow)✕ Cancelled — input was not hibernated.\(ui.palette.reset)\n\n"
+            _ = restore.withCString { ptr in
+                write(STDOUT_FILENO, ptr, strlen(ptr))
+            }
+            _exit(0)
         }
-        exit(0)
     }
+
+    // MARK: - Countdown & Hibernation
 
     private func startCountdown(seconds: Int, config: AppConfig, ui: TerminalUI) {
         ui.printCountdownHeader(config: config)
@@ -132,12 +251,17 @@ public final class AppRunner {
     private func beginHibernation(config: AppConfig, ui: TerminalUI) {
         let instance = KeyboardHibernator(lockMouse: config.lockMouse)
         hibernator = instance
+        totalTimeout = config.timeoutSeconds
         remainingTimeout = config.timeoutSeconds
 
         instance.onWakeHoldProgress = { [weak self] progress in
             guard let self = self, !self.didFinish else { return }
             self.currentHoldProgress = progress
-            ui.updateWakeStatusLine(holdProgress: progress, remainingTimeout: self.remainingTimeout)
+            ui.updateLiveStatusLine(
+                holdProgress: progress,
+                remainingTimeout: self.remainingTimeout,
+                totalTimeout: self.totalTimeout
+            )
         }
 
         instance.onUnlockTriggered = { [weak self] reason in
@@ -155,11 +279,14 @@ public final class AppRunner {
 
         ui.printHibernating(config: config)
         Feedback.playLockSound(silent: config.silent)
-        Feedback.sendNotification(
-            title: AppMeta.name,
-            message: "❄️ Input hibernating — safe to clean! Hold ⌃⌥⌘ to wake.",
-            silent: config.silent
-        )
+
+        let notifBody: String
+        if let t = config.timeoutSeconds {
+            notifBody = "❄️ Input hibernating for \(DurationHelper.formatHuman(t)) — hold ⌃⌥⌘ to wake early."
+        } else {
+            notifBody = "❄️ Input hibernating — safe to clean! Hold ⌃⌥⌘ to wake."
+        }
+        Feedback.sendNotification(title: AppMeta.name, message: notifBody, silent: config.silent)
 
         if let timeout = config.timeoutSeconds {
             startAutoWakeTimer(totalTimeout: timeout, config: config, ui: ui)
@@ -177,7 +304,11 @@ public final class AppRunner {
 
             if next > 0 {
                 if self.currentHoldProgress <= 0.0 {
-                    ui.updateWakeStatusLine(holdProgress: 0.0, remainingTimeout: next)
+                    ui.updateLiveStatusLine(
+                        holdProgress: 0.0,
+                        remainingTimeout: next,
+                        totalTimeout: totalTimeout
+                    )
                 }
             } else {
                 self.finishHibernation(reason: .timeout(seconds: totalTimeout), config: config, ui: ui)
@@ -209,13 +340,12 @@ public final class AppRunner {
         group.enter()
         Feedback.sendNotification(
             title: AppMeta.name,
-            message: "⌨️ Keyboard is awake — ready to use!",
+            message: "⌨️ Input is awake — ready to use!",
             silent: false
         ) {
             group.leave()
         }
 
-        // Allow sound playback (~0.6s) and notification dispatch, bounded at 1.5s
         var didExit = false
         let exitSafely = {
             guard !didExit else { return }

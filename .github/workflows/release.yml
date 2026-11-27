@@ -1,0 +1,92 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish-release:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Tests
+        run: swift test
+
+      - name: Build Universal Release Binary
+        run: swift build -c release --arch arm64 --arch x86_64
+
+      - name: Package & Sign Artifact
+        id: pkg
+        run: |
+          BIN_PATH=".build/apple/Products/Release/kh"
+          if [[ ! -f "$BIN_PATH" ]]; then
+            BIN_PATH=".build/release/kh"
+          fi
+          codesign --force --sign - "$BIN_PATH"
+
+          mkdir -p dist
+          cp "$BIN_PATH" dist/kh
+          chmod 755 dist/kh
+
+          VERSION="$("./dist/kh" --version | awk '{print $2}')"
+          SHORT_SHA="${GITHUB_SHA::7}"
+          PUBLISHED_AT="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+
+          tar -C dist -czf dist/kh-macos-universal.tar.gz kh
+          SHA256="$(shasum -a 256 dist/kh-macos-universal.tar.gz | awk '{print $1}')"
+
+          cat > dist/release-manifest.json <<EOF
+          {
+            "version": "${VERSION}",
+            "sha": "${GITHUB_SHA}",
+            "shortSha": "${SHORT_SHA}",
+            "asset": "kh-macos-universal.tar.gz",
+            "sha256": "${SHA256}",
+            "publishedAt": "${PUBLISHED_AT}"
+          }
+          EOF
+
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "short_sha=${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish Rolling Latest Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ steps.pkg.outputs.version }}"
+          SHORT_SHA="${{ steps.pkg.outputs.short_sha }}"
+          TITLE="KeyboardHibernate v${VERSION} (${SHORT_SHA})"
+          NOTES="Automated universal macOS build (arm64 + x86_64) for commit \`${SHORT_SHA}\`."
+
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            TAG_NAME="${GITHUB_REF_NAME}"
+            if gh release view "$TAG_NAME" >/dev/null 2>&1; then
+              gh release upload "$TAG_NAME" \
+                dist/kh-macos-universal.tar.gz \
+                dist/release-manifest.json \
+                --clobber
+            else
+              gh release create "$TAG_NAME" \
+                dist/kh-macos-universal.tar.gz \
+                dist/release-manifest.json \
+                --title "$TITLE" \
+                --notes "$NOTES" \
+                --latest
+            fi
+          else
+            gh release delete latest --yes 2>/dev/null || true
+            git push origin :refs/tags/latest 2>/dev/null || true
+            gh release create latest \
+              dist/kh-macos-universal.tar.gz \
+              dist/release-manifest.json \
+              --target "$GITHUB_SHA" \
+              --title "$TITLE" \
+              --notes "$NOTES" \
+              --latest
+          fi

@@ -19,7 +19,17 @@ echo ""
 
 removed_count=0
 
-# 1. Gather potential binary locations (current 'kh' and legacy 'cmk')
+# 1. Stop and remove auto-updater LaunchAgent if present
+PLIST_PATH="$HOME/Library/LaunchAgents/com.shovon.kh.updater.plist"
+if [[ -f "$PLIST_PATH" ]]; then
+  echo -e "  ${BOLD}Disabling auto-updater LaunchAgent...${RESET}"
+  launchctl bootout "gui/$(id -u)/com.shovon.kh.updater" 2>/dev/null || true
+  launchctl unload -w "$PLIST_PATH" 2>/dev/null || true
+  rm -f "$PLIST_PATH"
+  removed_count=$((removed_count + 1))
+fi
+
+# 2. Gather potential binary locations (current 'kh' and legacy 'cmk')
 candidate_paths=(
   "/usr/local/bin/kh"
   "/opt/homebrew/bin/kh"
@@ -37,7 +47,6 @@ for cmd in kh cmk; do
   done < <(which -a "$cmd" 2>/dev/null || true)
 done
 
-# Deduplicate safely without whitespace splitting
 unique_candidates=()
 while IFS= read -r line; do
   [[ -n "$line" ]] && unique_candidates+=("$line")
@@ -56,7 +65,7 @@ for bin in "${unique_candidates[@]}"; do
   fi
 done
 
-# 2. Clean temporary directories & installer remnants
+# 3. Clean temporary directories & installer remnants
 echo -e "  ${BOLD}Cleaning temporary files & caches...${RESET}"
 tmp_base="${TMPDIR:-/tmp}"
 tmp_base="${tmp_base%/}"
@@ -75,7 +84,7 @@ for item in "${tmp_matches[@]}"; do
   fi
 done
 
-# 3. Clean application support and user caches if any were ever created
+# 4. Clean application support, state, and user caches
 for app_dir in \
   "$HOME/Library/Caches/kh" \
   "$HOME/Library/Caches/cmk" \
@@ -90,7 +99,7 @@ for app_dir in \
   fi
 done
 
-# 4. Clean local repo build artifacts if run inside repository
+# 5. Clean local repo build artifacts if run inside repository
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || echo "")"
 REPO_DIR=""
 if [[ -f "./Package.swift" && -d "./Sources/kh" ]]; then
