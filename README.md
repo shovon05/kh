@@ -1,158 +1,247 @@
-# ❄️ KeyboardHibernate (`kh`)
+<div align="center">
 
-> A free, open-source macOS terminal app that fully hibernates your keyboard so you can wipe it clean — every key, every modifier, completely blocked.
+<br />
 
-![macOS](https://img.shields.io/badge/macOS-12%2B-blue?logo=apple)
-![Swift](https://img.shields.io/badge/Swift-5.9-orange?logo=swift)
-![License](https://img.shields.io/badge/license-MIT-green)
-![Open Source](https://img.shields.io/badge/open%20source-❤-red)
+<h1>❄️ KeyboardHibernate</h1>
+
+<p>
+  <strong>Hibernate your Mac keyboard (and trackpad) in one command so you can clean every key without a single stray keypress.</strong>
+</p>
+
+<p>
+  <img src="https://img.shields.io/badge/macOS-12%2B-0A84FF?style=for-the-badge&logo=apple&logoColor=white" alt="macOS 12+" />
+  <img src="https://img.shields.io/badge/Swift-5.9%2B-F05138?style=for-the-badge&logo=swift&logoColor=white" alt="Swift 5.9+" />
+  <img src="https://img.shields.io/badge/Dependencies-Zero-30D158?style=for-the-badge" alt="Zero Dependencies" />
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-64D2FF?style=for-the-badge" alt="MIT License" /></a>
+</p>
+
+<p>
+  <a href="#-installation">Install</a> &nbsp;·&nbsp;
+  <a href="#-features">Features</a> &nbsp;·&nbsp;
+  <a href="#-usage--cli-reference">CLI Reference</a> &nbsp;·&nbsp;
+  <a href="#-how-it-works--permissions">How It Works</a> &nbsp;·&nbsp;
+  <a href="#%EF%B8%8F-uninstallation">Uninstall</a>
+</p>
+
+<br />
+
+</div>
+
+```text
+  ╭──────────────────────────────────────────────────────────╮
+  │ ◈ KeyboardHibernate  v1.2.0                              │
+  │ github.com/shovon05/kh                                   │
+  ╰──────────────────────────────────────────────────────────╯
+
+  ╭──────────────────────────────────────────────────────────╮
+  │ ● INPUT HIBERNATING — SAFE TO CLEAN                      │
+  │                                                          │
+  │ ▸ Keys, modifiers, Space & media keys blocked            │
+  │ ▸ Mouse & trackpad clicks/movement blocked               │
+  │                                                          │
+  │ Wake: Hold Ctrl + Option + Cmd for 0.6s                  │
+  │ Auto-wake timer: 60s                                     │
+  ╰──────────────────────────────────────────────────────────╯
+
+  ▸ Wake:   [████████████░░░░░░] 67% (keep holding ⌃ ⌥ ⌘)
+```
 
 ---
 
 ## ✨ Features
 
-- **Customizable countdown** — 10s default (`--seconds <n>`), or instant hibernation (`--now`)
-- **Full keyboard hibernation** — every key is blocked, including Space, modifiers, and function keys
-- **No key leaks through** — event tap sits at `.headInsertEventTap` with automatic timeout recovery
-- **Soft system audio feedback** — plays pleasant chime on hibernate and wake (or `--silent`)
-- **Native macOS notifications** — "Keyboard hibernating" / "Keyboard awake"
-- **Simple, secure wake chord**: hold `Ctrl + Option + Cmd` simultaneously
-- **Clean terminal UI** with live progress bar and guaranteed cursor restoration
-- **Zero dependencies** — pure Swift + macOS native frameworks
-- **Zero-footprint uninstaller** — leaves no lingering files, caches, or background daemons
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <h3>🛡️ Total Key & Media Blocking</h3>
+      Blocks <code>keyDown</code>, <code>keyUp</code>, <code>flagsChanged</code>, and <code>NX_SYSDEFINED</code> events — stopping Space, modifiers, brightness, volume, play/pause, dictation, and Spotlight keys cold.
+    </td>
+    <td width="50%" valign="top">
+      <h3>🖐️ Accidental-Wipe Wake Guard</h3>
+      Requires holding <code>⌃ Ctrl + ⌥ Option + ⌘ Cmd</code> continuously for <strong>0.6s</strong> with a live progress bar — wiping across your bottom-left corner keys won't unlock prematurely.
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <h3>🖱️ Optional Trackpad & Mouse Lock</h3>
+      Pass <code>--lock-mouse</code> (<code>-m</code>) to block clicks, drags, cursor movement, and scrolling while wiping around your trackpad.
+    </td>
+    <td width="50%" valign="top">
+      <h3>⏱️ Safety Auto-Wake Timeout</h3>
+      Pass <code>--timeout &lt;sec&gt;</code> (<code>-t</code>) to guarantee automatic input restoration after a set number of seconds.
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <h3>🎨 Polished Terminal UX</h3>
+      Pixel-aligned Unicode cards, smooth live progress bars, instant <code>Ctrl+C</code> cancellation, TTY/<code>NO_COLOR</code> awareness, and guaranteed cursor restoration.
+    </td>
+    <td width="50%" valign="top">
+      <h3>🪶 Pure Swift, Zero Bloat</h3>
+      Built exclusively on macOS native frameworks (<code>CoreGraphics</code>, <code>AppKit</code>, <code>Carbon</code>) with no background daemons and a zero-trace uninstaller.
+    </td>
+  </tr>
+</table>
 
 ---
 
 ## 📦 Installation
 
-### One-liner (recommended)
+### One-Line Installer (Recommended)
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/shovon05/kh/main/scripts/install.sh | bash
 ```
 
-### Manual build from source
+> Installs automatically into `/opt/homebrew/bin` (Apple Silicon), `/usr/local/bin`, or a custom directory via `PREFIX=/custom/dir`.
+
+### Build From Source
 
 ```bash
 git clone https://github.com/shovon05/kh.git
 cd kh
+bash scripts/install.sh
+```
+
+Or build manually with Swift Package Manager:
+
+```bash
 swift build -c release
-sudo cp .build/release/kh /usr/local/bin/kh
+codesign --force --sign - .build/release/kh
+cp .build/release/kh /opt/homebrew/bin/kh   # or /usr/local/bin/kh
 ```
 
 ### Requirements
 
-- macOS 12 (Monterey) or later
-- Xcode Command Line Tools (`xcode-select --install`)
+- **macOS 12 (Monterey)** or later
+- **Xcode Command Line Tools** (`xcode-select --install`)
 
 ---
 
-## 🚀 Usage
+## 🚀 Usage & CLI Reference
 
 ```bash
-# Standard 10-second countdown
+# Default 10-second countdown before hibernating
 kh
 
-# Custom countdown duration (e.g. 5 seconds)
-kh --seconds 5
+# Start immediately and lock trackpad/mouse too
+kh --now --lock-mouse
 
-# Hibernate immediately without countdown
-kh --now
+# 5-second countdown with a 60-second auto-wake safety timer
+kh --seconds 5 --timeout 60
 
-# Run silently without sound effects or notifications
+# Silent mode (no chimes or desktop notifications)
 kh --silent
-
-# Show help & all options
-kh --help
 ```
 
-### What happens when you run `kh`:
+### Options
 
-1. `kh` launches and displays a countdown with a live progress bar.
-2. Press `Ctrl+C` anytime during the countdown to safely cancel.
-3. Once the countdown ends, the keyboard **fully hibernates** ❄️.
-4. A soft sound plays and a macOS notification fires.
-5. Wipe and clean your keyboard freely 🧹.
-6. Hold **`Ctrl + Option + Cmd`** simultaneously to wake.
-7. Another soft sound plays, the awake screen shows, and your keyboard is instantly active ✅.
+| Flag | Description | Default |
+| :--- | :--- | :--- |
+| `-s, --seconds <sec>` | Countdown before hibernation (`0–300`, also supports `--seconds=N`) | `10` |
+| `--now` | Hibernate immediately without a countdown | `off` |
+| `-t, --timeout <sec>` | Auto-wake automatically after `N` seconds (`1–3600`) | `off` |
+| `-m, --lock-mouse` | Also block mouse/trackpad clicks, movement, and scrolling | `off` |
+| `--silent` | Disable lock/wake sounds and macOS notifications | `off` |
+| `--no-color` | Disable ANSI colors (also respects `NO_COLOR` & non-TTY pipes) | `auto` |
+| `-v, --version` | Print version information | — |
+| `-h, --help` | Show CLI help | — |
+
+### Wake & Cancel Shortcuts
+
+| Action | Shortcut | Notes |
+| :--- | :--- | :--- |
+| **Wake input** | Hold `⌃ Ctrl` + `⌥ Option` + `⌘ Cmd` for `0.6s` | Modifier-only hold prevents accidental wipes & keeps Space blocked |
+| **Cancel countdown** | `Ctrl + C` | Immediately cancels before hibernation begins |
 
 ---
 
-## 🔐 Permissions
+## 🔐 How It Works & Permissions
 
-`kh` uses macOS's **Accessibility API** to intercept keyboard events system-wide. On first run:
+`kh` registers a `CGEventTap` at `.headInsertEventTap` on the active session (`cgSessionEventTap`) and drops matching keyboard, modifier, media (`NX_SYSDEFINED`), and optional pointer events before applications see them. If macOS temporarily times out the tap under heavy load, `kh` re-enables it automatically.
 
-1. macOS will show a permission dialog.
-2. Go to **System Settings → Privacy & Security → Accessibility**.
-3. Enable your Terminal app (Terminal, iTerm2, Warp, Ghostty, Alacritty, etc.).
+### Granting Accessibility Permission
+
+On first launch, macOS requires **Accessibility** permission for your terminal app:
+
+1. Run `kh` — macOS opens or requests the Accessibility prompt.
+2. Open **System Settings → Privacy & Security → Accessibility**.
+3. Enable your terminal (**Terminal**, **iTerm2**, **Ghostty**, **Warp**, **Alacritty**, etc.).
 4. Run `kh` again.
 
-> **Note:** macOS grants Accessibility to the terminal host running the binary. No special daemon or background helper is installed.
+### Good to Know
+
+- **Touch ID / Power button:** macOS handles the physical Power/Touch ID button below the event-tap layer, so pressing it will still sleep/lock your Mac.
+- **Secure Keyboard Entry:** If your terminal has *Secure Keyboard Entry* enabled (or a password field is focused), macOS blocks all event taps by design. `kh` detects this and warns you before locking.
 
 ---
 
-## 🔑 Wake Shortcut
+## 🗑️ Uninstallation
 
-| Action | Shortcut |
-|--------|----------|
-| **Wake keyboard** | Hold `Ctrl` + `Option` + `Cmd` simultaneously |
-| **Cancel (before hibernate)** | `Ctrl + C` |
-
-> **Note:** The wake chord uses **only modifier keys** held together. This ensures even Space is fully blocked during hibernation — no key of any kind can slip through while wiping keys.
-
----
-
-## 🗑️ Complete Uninstallation
-
-To completely uninstall `kh` with zero traces left behind:
+Remove all installed binaries, temporary build directories, and caches with zero leftover daemons or config files:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/shovon05/kh/main/scripts/uninstall.sh | bash
 ```
 
-Or from a local clone:
+Or locally:
 
 ```bash
 bash scripts/uninstall.sh
 ```
 
-### What the uninstaller cleans:
-- All installed binaries across system directories (`/usr/local/bin/kh`, `/opt/homebrew/bin/kh`, `~/.local/bin/kh`, and legacy `cmk`)
-- Temporary build directories and installer remnants (`/tmp/kh*`)
-- Local build caches (`.build/`, `.swiftpm/`)
-- User application caches (if any)
-
-Zero background services, daemons, or configuration files remain.
-
 ---
 
-## 🏗️ Project Structure
+## 🏗️ Project Structure & Development
 
-```
+```text
 kh/
+├── .github/workflows/ci.yml             # macOS build, test & script checks
 ├── Sources/
+│   ├── KeyboardHibernateCore/           # Core logic, CLI parser, UI & event tap
+│   │   ├── AppMeta.swift
+│   │   ├── AppRunner.swift
+│   │   ├── CLI.swift
+│   │   ├── Feedback.swift
+│   │   ├── KeyboardHibernator.swift
+│   │   └── TerminalUI.swift
 │   └── kh/
-│       └── main.swift        # Complete app logic, CLI args, & event tap
+│       └── main.swift                   # Thin CLI entrypoint
+├── Tests/
+│   └── KeyboardHibernateCoreTests/      # Swift Testing unit suite
 ├── scripts/
-│   ├── install.sh            # Universal installer (local & remote)
-│   └── uninstall.sh          # Zero-trace uninstaller
-├── Package.swift             # Swift Package Manager manifest
-├── LICENSE
+│   ├── install.sh                       # Universal macOS installer
+│   └── uninstall.sh                     # Zero-trace uninstaller
+├── Package.swift                        # Swift Package Manager manifest
+├── LICENSE                              # MIT License
 └── README.md
 ```
 
+Run build & tests locally:
+
+```bash
+swift build
+swift test
+
+# If running with Xcode Command Line Tools only (without full Xcode):
+swift test -Xswiftc -plugin-path -Xswiftc /Library/Developer/CommandLineTools/usr/lib/swift/host/plugins/testing
+```
+
 ---
 
-## 🤝 Contributing
+## 🗺️ Roadmap
 
-PRs and suggestions welcome!
-
+- [x] Media & system-defined key blocking (`NX_SYSDEFINED`)
+- [x] Accidental-wipe wake hold protection (`0.6s` hold guard)
+- [x] Optional mouse & trackpad locking (`--lock-mouse`)
+- [x] Safety auto-wake timer (`--timeout`)
 - [ ] Homebrew formula (`brew install shovon05/tap/kh`)
-- [ ] Mouse / trackpad disabling option (`kh --lock-mouse`)
-- [ ] Menu bar status indicator while hibernating
+- [ ] Optional menu bar status indicator while hibernating
 
 ---
 
-## 📄 License
+<div align="center">
 
-MIT — free for everyone, forever.
+Released under the [MIT License](LICENSE). Built with pure Swift for macOS.
+
+</div>

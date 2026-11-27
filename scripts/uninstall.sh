@@ -2,48 +2,48 @@
 # KeyboardHibernate (kh) — Complete Uninstaller
 # Usage: curl -fsSL https://raw.githubusercontent.com/shovon05/kh/main/scripts/uninstall.sh | bash
 
-set -eo pipefail
+set -euo pipefail
+shopt -s nullglob
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 CYAN='\033[0;36m'
-YELLOW='\033[1;33m'
 BOLD='\033[1m'
 RESET='\033[0m'
 
 echo ""
-echo -e "${CYAN}${BOLD}╔══════════════════════════════════════════╗${RESET}"
-echo -e "${CYAN}${BOLD}║     ❄️   KeyboardHibernate Uninstaller   ║${RESET}"
-echo -e "${CYAN}${BOLD}╚══════════════════════════════════════════╝${RESET}"
+echo -e "${CYAN}  ╭──────────────────────────────────────────╮${RESET}"
+echo -e "${CYAN}  │${RESET}  ${BOLD}◈ KeyboardHibernate Uninstaller${RESET}         ${CYAN}│${RESET}"
+echo -e "${CYAN}  ╰──────────────────────────────────────────╯${RESET}"
 echo ""
 
 removed_count=0
 
-# 1. Gather all potential binary locations (current 'kh' and legacy 'cmk')
+# 1. Gather potential binary locations (current 'kh' and legacy 'cmk')
 candidate_paths=(
   "/usr/local/bin/kh"
   "/opt/homebrew/bin/kh"
   "$HOME/.local/bin/kh"
-  "/usr/bin/kh"
   "/usr/local/bin/cmk"
   "/opt/homebrew/bin/cmk"
   "$HOME/.local/bin/cmk"
-  "/usr/bin/cmk"
 )
 
-# Also check anything currently in PATH
 for cmd in kh cmk; do
   while IFS= read -r path; do
-    if [[ -n "$path" && -f "$path" ]]; then
+    if [[ -n "$path" && ( -f "$path" || -L "$path" ) ]]; then
       candidate_paths+=("$path")
     fi
   done < <(which -a "$cmd" 2>/dev/null || true)
 done
 
-# Deduplicate candidate paths
-unique_candidates=($(printf "%s\n" "${candidate_paths[@]}" | sort -u))
+# Deduplicate safely without whitespace splitting
+unique_candidates=()
+while IFS= read -r line; do
+  [[ -n "$line" ]] && unique_candidates+=("$line")
+done < <(printf '%s\n' "${candidate_paths[@]}" | awk '!seen[$0]++')
 
-echo -e "${BOLD}  Checking for installed binaries...${RESET}"
+echo -e "  ${BOLD}Checking for installed binaries...${RESET}"
 for bin in "${unique_candidates[@]}"; do
   if [[ -f "$bin" || -L "$bin" ]]; then
     echo -e "  Removing: ${bin}"
@@ -57,15 +57,22 @@ for bin in "${unique_candidates[@]}"; do
 done
 
 # 2. Clean temporary directories & installer remnants
-echo -e "${BOLD}  Cleaning temporary files & caches...${RESET}"
-for tmp_glob in "/tmp/kh"* "/tmp/cmk"* "${TMPDIR:-/tmp}/kh"* "${TMPDIR:-/tmp}/cmk"*; do
-  for item in $tmp_glob; do
-    if [[ -e "$item" ]]; then
-      echo -e "  Removing: ${item}"
-      rm -rf "$item" 2>/dev/null || sudo rm -rf "$item" 2>/dev/null || true
-      removed_count=$((removed_count + 1))
-    fi
-  done
+echo -e "  ${BOLD}Cleaning temporary files & caches...${RESET}"
+tmp_base="${TMPDIR:-/tmp}"
+tmp_base="${tmp_base%/}"
+tmp_matches=(
+  /tmp/kh*
+  /tmp/cmk*
+  "${tmp_base}"/kh*
+  "${tmp_base}"/cmk*
+)
+
+for item in "${tmp_matches[@]}"; do
+  if [[ -e "$item" ]]; then
+    echo -e "  Removing: ${item}"
+    rm -rf "$item" 2>/dev/null || sudo rm -rf "$item" 2>/dev/null || true
+    removed_count=$((removed_count + 1))
+  fi
 done
 
 # 3. Clean application support and user caches if any were ever created
@@ -92,21 +99,19 @@ elif [[ -n "$SCRIPT_DIR" && -f "$SCRIPT_DIR/../Package.swift" && -d "$SCRIPT_DIR
   REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 fi
 
-if [[ -n "$REPO_DIR" && -d "$REPO_DIR/.build" ]]; then
-  echo -e "  Cleaning local build artifacts in ${REPO_DIR}/.build..."
-  rm -rf "${REPO_DIR}/.build"
-  rm -rf "${REPO_DIR}/.swiftpm"
+if [[ -n "$REPO_DIR" && ( -d "$REPO_DIR/.build" || -d "$REPO_DIR/.swiftpm" ) ]]; then
+  echo -e "  Cleaning local build artifacts in ${REPO_DIR}..."
+  rm -rf "${REPO_DIR}/.build" "${REPO_DIR}/.swiftpm"
   removed_count=$((removed_count + 1))
 fi
 
 echo ""
-# Verification check
 if command -v kh &>/dev/null; then
-  echo -e "${RED}⚠ Warning: A 'kh' binary is still found at: $(which kh)${RESET}"
+  echo -e "  ${RED}! Warning: A 'kh' binary is still found at: $(which kh)${RESET}"
 elif command -v cmk &>/dev/null; then
-  echo -e "${RED}⚠ Warning: A 'cmk' binary is still found at: $(which cmk)${RESET}"
+  echo -e "  ${RED}! Warning: A 'cmk' binary is still found at: $(which cmk)${RESET}"
 else
-  echo -e "${GREEN}${BOLD}  ✅  Uninstallation complete!${RESET}"
-  echo -e "${GREEN}  Zero traces of KeyboardHibernate remain on your system.${RESET}"
+  echo -e "  ${GREEN}${BOLD}✓ Uninstallation complete!${RESET}"
+  echo -e "  ${GREEN}Removed ${removed_count} item(s). Zero traces of KeyboardHibernate remain.${RESET}"
 fi
 echo ""
